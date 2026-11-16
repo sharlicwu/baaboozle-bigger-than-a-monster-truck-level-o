@@ -648,16 +648,25 @@ function doAction(c, i){
       }
       break;
     }
-    case "double":
-      team.score = team.score * 2; sfxBig();
+    case "double": {
+      /* negative scores flip positive first, then ×2 (reward cards never punish) */
+      const was = team.score;
+      team.score = Math.abs(team.score) * 2; sfxBig();
       setStatus('⭐ <b>'+team.name+'</b>’s score doubled!');
-      result('⭐ <b>'+team.name+'</b>’s score is doubled → <b>'+team.score+'</b>'); finish();
+      result('⭐ <b>'+team.name+'</b>’s score is doubled → <b>'+team.score+'</b>' +
+             (was < 0 ? ' <span style="color:#a9c8e6">(was '+was+' → flipped positive!)</span>' : ''));
+      finish();
       break;
-    case "triple":
-      team.score = team.score * 3; sfxTriple();
+    }
+    case "triple": {
+      const was = team.score;
+      team.score = Math.abs(team.score) * 3; sfxTriple();
       setStatus('🔺 <b>'+team.name+'</b>’s score tripled!');
-      result('🔺 <b>'+team.name+'</b>’s score is tripled → <b>'+team.score+'</b>'); finish();
+      result('🔺 <b>'+team.name+'</b>’s score is tripled → <b>'+team.score+'</b>' +
+             (was < 0 ? ' <span style="color:#a9c8e6">(was '+was+' → flipped positive!)</span>' : ''));
+      finish();
       break;
+    }
     case "bomb":
       team.score = 0; sfxBomb();
       setStatus('💣 Boom! <b>'+team.name+'</b>’s score is now 0');
