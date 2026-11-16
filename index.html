@@ -119,6 +119,10 @@ option{background:#0e2a47;color:#eaf3ff}
   overflow-wrap:break-word;word-break:normal;hyphens:auto;max-width:100%}
 .tag{position:absolute;top:4px;left:6px;font-size:clamp(8px,calc(var(--cw)*.1),13px);
   font-weight:800;color:#9fd8ff;letter-spacing:.5px}
+/* points badge on word cards (top-left slot — actions use it for their emoji) */
+.pts{position:absolute;top:4px;left:5px;font-size:clamp(8px,calc(var(--cw)*.13),15px);
+  font-weight:900;color:#ffd600;background:rgba(255,214,0,.12);border:1px solid rgba(255,214,0,.6);
+  border-radius:7px;padding:0 4px;line-height:1.35;letter-spacing:.2px}
 .act-emoji{font-size:clamp(16px,calc(var(--cw)*.3),38px);line-height:1}
 .act-name{font-size:clamp(9px,calc(var(--cw)*.12),15px);font-weight:900;line-height:1.1;overflow-wrap:anywhere}
 .tick{position:absolute;top:3px;right:6px;font-size:clamp(11px,calc(var(--cw)*.18),22px);display:none}
@@ -513,7 +517,7 @@ function buildBoard(){
       '<div class="card-inner">' +
         '<div class="face back"><div class="num">'+(i+1)+'</div><div class="pick">Pick me!</div></div>' +
         '<div class="face front">' +
-          (c.type==="word" ? "" : '<div class="tag">'+c.emoji+'</div>') +
+          (c.type==="word" ? '<div class="pts">⭐'+c.pts+'</div>' : '<div class="tag">'+c.emoji+'</div>') +
           (c.type==="word"
             ? '<div class="word" style="font-size:'+wordSize(c.en)+'">'+esc(c.en)+'</div>'
             : '<div class="act-emoji">'+c.emoji+'</div><div class="act-name">'+esc(c.label)+'</div>') +
@@ -567,11 +571,11 @@ function flip(i){
 function startWord(c, i){
   const wrongs = WORDS.filter(w=>w.def !== c.def).map(w=>w.def);
   const wrong = wrongs[Math.floor(Math.random()*wrongs.length)];
-  q = { card:i, team:cur, correct:c.def, en:c.en, answered:false };
+  q = { card:i, team:cur, correct:c.def, en:c.en, pts:c.pts, answered:false };
   speak(c.en);
   setStatus('🔊 Listen & choose: <b>'+esc(c.en)+'</b> — <b>'+TEAMS[cur].name+'</b> team');
   setBar(
-    '<div class="barinfo">What does <b>'+esc(c.en)+'</b> mean? <span style="color:#a9c8e6">('+TEAMS[cur].name+' team)</span></div>' +
+    '<div class="barinfo">What does <b>'+esc(c.en)+'</b> mean? <span style="color:#a9c8e6">('+TEAMS[cur].name+' team)</span> <span style="color:#ffd600">⭐ '+c.pts+' pts</span></div>' +
     '<div class="opts">' +
       shuffle([c.def, wrong]).map(o=>'<button class="opt" data-def="'+esc(o)+'">'+esc(o)+'</button>').join("") +
     '</div>' +
@@ -592,15 +596,15 @@ function answer(btn){
   const team = TEAMS[q.team];
   const last = isLastCard();
   if(right(btn)){
-    team.score += 20; team.coins += 1;
+    team.score += q.pts; team.coins += 1;
     markDone(q.card, false);
     sfxCorrect();
     updateScoreboard(q.team);
-    setStatus('✅ Correct! <b>'+team.name+'</b> +20 points 🪙 +1 coin');
+    setStatus('✅ Correct! <b>'+team.name+'</b> +'+q.pts+' points 🪙 +1 coin');
     /* the final card stays on screen 4 seconds before the result screen */
     setBar(last
-      ? '<div class="barinfo good">✅ Correct! +20 points 🪙 +1 coin — final card, game over shortly…</div>'
-      : '<div class="barinfo good">✅ Correct! +20 points 🪙 +1 coin — moving on…</div>');
+      ? '<div class="barinfo good">✅ Correct! +'+q.pts+' points 🪙 +1 coin — final card, game over shortly…</div>'
+      : '<div class="barinfo good">✅ Correct! +'+q.pts+' points 🪙 +1 coin — moving on…</div>');
     setTimeout(nextTurn, last ? 4000 : 1400);
   }else{
     team.score -= 10;
@@ -669,23 +673,18 @@ function doAction(c, i){
     case "give":
       pickTeam('🎁 To which team do you give points?', cur, t=>{
         pickAmount(t, amt=>{
-          t.score += amt; sfxLucky();
-          setStatus('🎁 <b>'+team.name+'</b> gave '+amt+' points to <b>'+t.name+'</b>');
-          result('🎁 <b>'+team.name+'</b> gives <b>'+amt+' points</b> to <b>'+t.name+'</b>!'); finish();
+          team.score -= amt; t.score += amt; sfxLucky();
+          setStatus('🎁 <b>'+team.name+'</b> gave '+amt+' points to <b>'+t.name+'</b> (now '+team.name+' '+team.score+', '+t.name+' '+t.score+')');
+          result('🎁 <b>'+team.name+'</b> gives <b>'+amt+' points</b> to <b>'+t.name+'</b> → '+team.name+' <b>'+team.score+'</b>, '+t.name+' <b>'+t.score+'</b>'); finish();
         });
       });
       break;
     case "steal":
       pickTeam('🐴 Which team do you steal from?', cur, t=>{
-        if(t.score <= 0){
-          setStatus('🐴 <b>'+t.name+'</b> has 0 points — nothing to steal!');
-          result('🐴 <b>'+t.name+'</b> has <b>0 points</b> — nothing to steal!'); finish();
-          return;
-        }
         pickStealAmount(t, amt=>{
           t.score -= amt; team.score += amt; sfxSteal();
-          setStatus('🐴 <b>'+team.name+'</b> stole '+amt+' points from <b>'+t.name+'</b>');
-          result('🐴 <b>'+team.name+'</b> steals <b>'+amt+' points</b> from <b>'+t.name+'</b>!'); finish();
+          setStatus('🐴 <b>'+team.name+'</b> stole '+amt+' points from <b>'+t.name+'</b> (now '+t.name+' '+t.score+')');
+          result('🐴 <b>'+team.name+'</b> steals <b>'+amt+' points</b> from <b>'+t.name+'</b> → '+t.name+' <b>'+t.score+'</b>'); finish();
         });
       });
       break;
@@ -712,18 +711,18 @@ function pickTeam(title, exclude, cb){
 }
 function pickAmount(t, cb){
   setStatus('🎁 How many points for <b>'+t.name+'</b>?');
-  setBar('<div class="barinfo">🎁 Give <b>'+esc(t.name)+'</b> how many points?</div><div class="picker">' +
+  setBar('<div class="barinfo">🎁 Give <b>'+esc(t.name)+'</b> how many points? <span style="color:#a9c8e6">(comes out of your score)</span></div><div class="picker">' +
     [10,20,50].map(a=>'<button class="pbtn" data-a="'+a+'" style="background:#1769aa">+'+a+'</button>').join("") +
     '</div>');
   barEl.querySelectorAll(".pbtn").forEach(b=>{
     b.onclick = ()=>{ sfxClick(); cb(parseInt(b.dataset.a,10)); };
   });
 }
-/* steal: player picks how much — never more than the victim actually has */
+/* steal: no cap — the victim may drop below 0 (fair play, negative scores allowed) */
 function pickStealAmount(t, cb){
   const FIXED = [10,20,30,50];
-  const opts = FIXED.filter(a=>a<=t.score);
-  if(opts.indexOf(t.score) < 0) opts.push(t.score);        /* "All" when the total isn't listed */
+  const opts = FIXED.slice();
+  if(t.score > 0 && opts.indexOf(t.score) < 0) opts.push(t.score);        /* "All" when they have a positive odd total */
   const isAll = a => (a===t.score && FIXED.indexOf(a) < 0);
   setStatus('🐴 How many points to steal from <b>'+t.name+'</b>?');
   setBar('<div class="barinfo">🐴 Steal how many points from <b>'+esc(t.name)+'</b>? — they have <b>'+t.score+'</b></div><div class="picker">' +
@@ -819,8 +818,14 @@ window.addEventListener("load", ()=>{ fitBW(0); fitBrand(); });
 
 /* ═══════════════ RESET / CONTROLS ═══════════════ */
 function reset(){
+  /* every word card is worth 10/15/20/25/30 — all five values always appear */
+  const PTS = [10,15,20,25,30];
+  const ptsPool = shuffle(PTS.slice()).concat([
+    PTS[Math.floor(Math.random()*PTS.length)],
+    PTS[Math.floor(Math.random()*PTS.length)]
+  ]);
   deck = shuffle(
-    WORDS.map(w=>({type:"word", en:w.en, def:w.def}))            /* 7 word cards */
+    WORDS.map((w,i)=>({type:"word", en:w.en, def:w.def, pts:ptsPool[i]}))            /* 7 word cards */
       .concat(ACTIONS.map(a=>({type:"action", kind:a.kind, emoji:a.emoji, label:a.label})))  /* 8 action cards */
   );
   TEAMS.forEach(t=>{ t.score = 0; t.coins = 0; });
